@@ -1,9 +1,9 @@
 ---
-status:
+status: review
 date: 02/10/2025
 decision-makers: Marim Sabah (Architect)
-consulted: Module tutor:
-informed: 
+consulted: Module tutor
+informed: Module tutor
 ---
 
 ## Context and Problem Statement
