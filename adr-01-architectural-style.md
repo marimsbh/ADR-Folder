@@ -7,48 +7,47 @@ informed: Module tutor
 ---
 
 ## Context and Problem Statement
-We must implement the Complaint Management System (CMS) for **five roles** (Consumer, Help Desk Agent, Support Person, Help Desk Manager, System Administrator) with strong **non-functional guarantees**:
+I have to implement the Complaint Management System (CMS) for five roles (Consumer, Help Desk Agent, Support Person, Help Desk Manager, System Administrator) with strong non functional guarantees:
 - **P01/P02** performance (Create p95 < 1.5 s, Read p95 < 300 ms)
-- **AV01** availability (read-only when IdP is down)
+- **AV01** availability (read only when IdP is down)
 - **S01/S02/S03** security, SSO, privacy (GDPR)
-- **SC01** scalability (2–3 replicas), **OBS01** observability, **AUD01** auditability
+- **SC01** scalability, OBS01 observability, AUD01 auditability
 
-Team is small, timeline is short (Task‑2 PoC), yet we need **clean traceability** from FRs/NFRs to C4 and tests.
 
-**Problem**: Choose an architectural style that delivers FRs (F01–F12) and these NFRs with **low operational complexity**, **high cohesion**, and **clear mapping** to the container and component models.
+**Problem**: Choose an architectural style that delivers FRs (F01–F12) and these NFRs with low operational complexity, high cohesion, and clear mapping to the container and component models.
 
 
 
 ## Decision Drivers
 
-- Meet **P01** and keep creates non‑blocking (email, AV) = asynchronous processing
+- Meet P01 and keep creates non‑blocking (email, AV) = asynchronous processing
 - Avoid cross‑service transactional complexity early = fewer deployable units
-- Enforce **tenant isolation** (S01) in one place (repos/filters; optional RLS)
-- Enable **observability** and **audit** from day one (OBS01, AUD01)
-- Deliver a **Task‑2** PoC quickly but in a way that scales to production (SC01)
+- Enforce tenant isolation (S01) in one place (repos/filters; optional RLS)
+- Enable observability and audit from day one (OBS01, AUD01)
+- Deliver a Task‑2 PoC quickly but in a way that scales to production (SC01)
 
 ## Considered Options
 
 1. **Microservices** (tickets, users, files, notifications, reporting)  
-2. **Modular Monolith API + Async Workers** (outbox to broker) **chosen**  
+2. **Modular Monolith API and Async Workers** (outbox to broker) **chosen**  
 3. **Single Monolith, synchronous only**  
 4. **Serverless first** (functions + managed queues)
    
 ## Decision Outcome
 
 Chosen option:  “Modular Monolith API + Async Workers (Outbox to RabbitMQ)”, because it provides:
-- **Strong cohesion** in one deployable API while enforcing **module boundaries** in code
-- **Asynchronous** flows for email, exports, AV (keeps **P01** create latency low)
-- **Simpler transactions**: DB writes + **outbox** in the same commit → reliable event delivery
-- **Lower ops burden** than microservices; clearer learning curve for Task‑2
+- **Strong cohesion** in one deployable API while enforcing module boundaries in code
+- **Asynchronous** flows for email, exports, AV (keeps P01 create latency low)
+- **Simpler transactions**: DB writes and outbox in the same commit = reliable event delivery
+- **Lower ops burden** than microservices, clearer learning curve for Task‑2
   
 ### Consequences
 
 * Good, because
-- Meets **P01** with async notifications/AV; keeps UI snappy
-- Easier to prove **AUD01** (single audit log); **OBS01** (central tracing)
-- **S01** simpler (one API enforces tenant filters; optional RLS later)
-- Clean mapping to **C4 L2** (API, Workers, RabbitMQ, DB, S3, IdP, Email, AV)
+- Meets P01 with async notifications/AV; keeps UI snappy
+- Easier to prove AUD01 (single audit log); OBS01 (central tracing)
+- S01 simpler (one API enforces tenant filters; optional RLS later)
+- Clean mapping to C4 L2 (API, Workers, RabbitMQ, DB, S3, IdP, Email, AV)
   
 * Bad, because
 - One deployable unit → potential hotspots; requires discipline on internal module boundaries
@@ -69,14 +68,14 @@ Chosen option:  “Modular Monolith API + Async Workers (Outbox to RabbitMQ)”,
 - **Bad, because**: Distributed transactions, service discovery, network latency; heavy for Task‑2.
 
 ### 2) Modular Monolith + Async Workers (**Chosen**)
-- **Good, because**: Simple ops; transactions are local; async keeps p95 low; easy testing.  
-- **Neutral, because**: Needs discipline to avoid coupling; still one deployable unit.  
-- **Bad, because**: Scaling per-module is coarse; future extraction effort if needed.
+- **Good, because**: Simple ops; transactions are local, async keeps p95 low, easy testing.  
+- **Neutral, because**: Needs discipline to avoid coupling, still one deployable unit.  
+- **Bad, because**: Scaling permodule is coarse; future extraction effort if needed.
 
 ### 3) Single Monolith (sync only)
 - **Good, because**: Simplest deployment, easiest to start.  
-- **Neutral, because**: OK for very small scope only.  
-- **Bad, because**: Fails **P01** (blocking email/AV); brittle under load; poor separation of concerns.
+- **Neutral, because**: Okay for very small scope only.  
+- **Bad, because**: Fails P01 (blocking email/AV), brittle under load, poor separation of concerns.
 
 ### 4) Serverless‑first
 - **Good, because**: Scales to zero; managed queues; low ops.  
