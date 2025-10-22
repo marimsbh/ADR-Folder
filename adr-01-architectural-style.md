@@ -22,9 +22,13 @@ Architectural quantum. I will be adopting a single architectural quantum (one ap
 ## Decision Drivers
 
 **Performance (P01)**: The user-facing synchronous path for creating/updating tickets must have a p95 latency under 1.5s. This mandates moving slow I/O operations (email, AV scanning) to an asynchronous, non-blocking flow. [2]
+
 **Simplicity and Low Operational Cost**: Minimize the number of deployable units to reduce operational complexity, simplify CI/CD, and streamline observability. [1][2]
+
 **Transactional Integrity**: Guarantee atomicity for core business operations. For example, creating a ticket and scheduling its notification email must succeed or fail together to prevent data inconsistency. [6]
+
 **Security & Auditability (S01, AUD01)**: Centralize the enforcement of tenant isolation and security controls within a single, well-defined boundary to simplify auditing and reduce the attack surface. [2]
+
 **Evolvability**: The architecture must be pragmatic for initial delivery but not a dead end. It should allow for future, targeted scaling if specific components become bottlenecks.
 
 ## Considered Options
