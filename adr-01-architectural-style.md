@@ -38,9 +38,13 @@ Presentation (web UIs) → Application (Spring Boot) → Data (PostgreSQL, Objec
 ## Decision Outcome
 
 Chosen option: Three-Tier Layered Web App with Background Jobs (Transactional Outbox).
+
 **Meets Performance (P01)**: The Transactional Outbox pattern allows us to commit a business entity (`Ticket`) and its corresponding event (`TicketCreatedEvent`) to the database in a single atomic transaction. A separate background worker process polls this outbox table, ensuring that slow operations like sending emails (F07) or processing file scans (F11) happen asynchronously and do not impact the synchronous API response time. [2], [6], [7]
+
 **Guarantees Reliability**: Unlike a dual-write approach (writing to the DB and then a message broker), the outbox pattern prevents data loss if the system fails after the DB commit but before the message is sent. This provides a strong consistency guarantee without the complexity of distributed transactions (2PC).
+
 **Simplifies Security (S01)**: With a single deployable API, tenant isolation and RBAC logic are centralized in one place (e.g., middleware, repository decorators). This creates a single, auditable enforcement point, drastically reducing the risk of cross-tenant data leakage compared to a distributed architecture where every service would need to reimplement or share this logic.
+
 **Lowers Operational Overhead**: A single application and database are fundamentally simpler to deploy, monitor, and manage than a distributed fleet of services, which would require a service mesh, distributed tracing infrastructure, and complex CI/CD orchestration from day one.
   
 ### Consequences
