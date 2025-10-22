@@ -54,7 +54,7 @@ Chosen option: Three-Tier Layered Web App with Background Jobs (Transactional Ou
 **Simplified Observability (OBS01)**: Tracing a request is trivial as it remains within a single process boundary, avoiding the need for complex distributed tracing correlation across network calls.
 **Strong Consistency**: Core operations remain ACID-compliant within the PostgreSQL database, which is the simplest and most robust model for the defined functional requirements.
 
-### Bad (and our Mitigation Strategy)
+### Bad (and Mitigation Strategy)
 **Risk of Database Contention**: The `Ticket` table could become a hotspot with frequent updates from consumers and agents.
 **Mitigation**: We will implement **optimistic locking** using a `version` column on the `Ticket` entity. This prevents lost updates by checking the version on write, failing fast, and forcing the client to retry, which is a safer contention management strategy than pessimistic locking for web-scale workloads.
 
