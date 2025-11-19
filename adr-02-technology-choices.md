@@ -1,129 +1,230 @@
-# ADR-02 – Technology Stack
-
-status: review  
-date: 09/10/2025  
-decision-makers: Marim Sabah (Architect)  
-consulted: Module tutor  
-informed: Module tutor  
+---
+status: review
+date: 02/10/2025
+decision-makers: Marim Sabah (Architect)
+consulted: Module tutor
+informed: Module tutor
+---
 
 ## Context and Problem Statement
 
-The CMS must be delivered as a proof-of-concept but also be credible as a
-production-ready SaaS platform. The case study requires:
+ABC Limited is building a multi-tenant Complaint Management System (CMS) for large Banking and Telecom clients (e.g. NatWest, Barclays, Vodafone, O2). The system must support:
 
-- Web access for five roles (Consumer, Help Desk Agent, Support Person, Help
-  Desk Manager, System Administrator).
-- 24/7 availability for online channels and WCAG 2.x accessibility.
-- Integration with external systems (Organisation IdP, File/Object Storage,
-  AV Scanner, Email System).
-- A 10% projected yearly increase in users, starting from large enterprises
-  like NatWest/Barclays with ~20M customers.
-- Implementation of non-functional requirements P01/P02 (latency), AV01
-  (availability), S01–S03 (security/privacy), SC01 (scalability), OBS01
-  (observability), AUD01 (auditability), FRONT01 (web performance).
+- Five roles: **Consumer, Help Desk Agent, Support Person, Help Desk Manager, System Administrator**  
+- Functional scope F01–F12 / user stories US1–US17:
+  - F01/F02/F03/F05/F06/F11: ticket creation (web/phone), status/timeline, resolve/close with CSAT, comments & attachments
+  - F04/F07/F09: assign/reassign, notifications, reporting & CSV exports
+  - F08/F10: multi-tenant admin, audit & GDPR/DSAR
+- Non-functional requirements (subset):
+  - **P01/P02** performance — Create p95 < 1.5 s; Read p95 < 300 ms
+  - **AV01** availability — 99.9%; read-only status even if IdP is down
+  - **A01–A03** accessibility — WCAG 2.2 AA, keyboard/SR, mobile/touch
+  - **S01/S02/S03** security & privacy — tenant isolation, OIDC SSO, GDPR
+  - **SC01** scalability — 20M+ consumers per tenant, 10% YoY growth
+  - **OBS01/AUD01/SLO01** observability & auditability
+  - **DR01/BKP01/KMS01/DATA01** data residency, backup & encryption
 
-A technology stack is needed that:
+The **architecture style** is already chosen in ADR-01: a single architectural quantum (three-tier layered web app + background jobs with a transactional outbox).  
 
-- Supports Java-based layered architecture chosen in ADR-01.
-- Has strong ecosystem support for HTTP APIs, security, and database access.
-- Is realistic for a student proof-of-concept yet representative of industry.
+**Problem**: Choose a technology stack (languages, frameworks, infrastructure components) that:
+
+- Implements the ADR-01 architecture effectively
+- Supports the ERD you designed (PostgreSQL-style schema with tenants, tickets, timeline, attachments, outbox, audit, templates)
+- Lets me realistically build the PoC (F01 + F03 + attachments + notifications) in the module timeframe
+- Is credible for enterprise customers (banks/telecoms) and supports future evolution (possible service extraction, multi-region, more channels)
 
 ## Decision Drivers
 
-- **Alignment with architectural style:** Needs robust support for layered web
-  app + background jobs + relational DB + outbox.
-- **Developer productivity:** Strong frameworks and documentation.
-- **Ecosystem & maturity:** Libraries for OIDC, AV integration, S3-compatible
-  storage, SMTP, etc.
-- **Fit with NFRs:** Performance, observability, rate limiting, security.
-- **Realistic in industry:** Technologies commonly used in enterprise SaaS.
+1. **Fit to ADR-01 architecture**  
+   - Must support layered architecture + background job runner + transactional outbox pattern.
+   - Must integrate with S3-compatible file/object storage and AV scanner (HTTP callback).
+
+2. **Meeting key NFRs**
+   - **P01/P02**: High throughput REST API, efficient DB integration, async jobs for email/exports/AV.
+   - **AV01/SC01**: Horizontal scaling (stateless app containers), DB connection pooling.
+   - **S01–S03, DATA01, KMS01**: Mature security libraries (OIDC/OAuth2, TLS, encryption).
+   - **OBS01/AUD01/SLO01**: Logging, metrics, tracing support.
+
+3. **Developer productivity & learning curve**
+   - I need to deliver a PoC plus documentation, not just a code spike.
+   - Tooling and ecosystem should minimise accidental complexity.
+
+4. **Alignment with course material & industry practice**
+   - Stack should be recognised as “industry-standard” to strengthen the report.
+   - Should align with examples from lectures (Spring Boot / layered architectures) and typical enterprise SaaS stacks.
+
+5. **Portability & local development**
+   - Must run on student laptops and SHU lab machines with minimal cloud dependencies.
+   - Prefer dockerisable stack with local equivalents for cloud services (e.g. MinIO vs S3).
 
 ## Considered Options
 
-1. **Java / Spring Boot backend + React frontend + PostgreSQL + S3/MinIO + Redis + Docker**  
-   (Chosen)
-
-2. **.NET 8 / ASP.NET Core backend + React frontend + SQL Server + Azure Blob + Redis**
-
-3. **Node.js / NestJS backend + React frontend + PostgreSQL + S3/MinIO + Redis**
-
-4. **Full serverless stack (AWS Lambda + API Gateway + DynamoDB + S3 + Cognito)**
+1. **Java 21 / Spring Boot 3.x backend + React 18 (TypeScript) frontend + PostgreSQL 15 + S3-compatible storage (MinIO) + Redis + Docker** (**Chosen**)
+2. **.NET 8 / ASP.NET Core + React + SQL Server + Azure Blob + Azure Cache for Redis**
+3. **Node.js 22 / NestJS + React + PostgreSQL + S3-compatible storage + Redis**
+4. **Serverless-first (AWS Lambda / API Gateway / DynamoDB / S3 / Cognito / SES)**
 
 ## Decision Outcome
 
-**Chosen option: Java / Spring Boot + React + PostgreSQL + S3/MinIO + Redis + Docker.**
+**Chosen option**: Java / Spring Boot backend + React frontend + PostgreSQL + S3/MinIO + Redis + Docker.
 
-- **Backend:** Spring Boot 3.x (Java 21)  
-  Provides MVC controllers, validation, Spring Data JPA for PostgreSQL,
-  Spring Security for OIDC/OAuth2, and Spring AMQP/scheduling for background
-  jobs (used for the outbox worker).
+This stack will be used as follows (mapping to C4 and ERD):
 
-- **Frontend:** React SPA for Consumer Web App, Agent/Manager Console, Admin
-  Console. This aligns with the C4 L2/L3 diagrams where Tier 1 is “Web app
-  (React)”.
+- **Web Application container** (C4 L2):
+  - Java 21, Spring Boot 3.x, Spring MVC, Spring Security (OIDC + PKCE), Spring Data JPA.
+  - Implements controllers/services/repositories for F01/F03/F04/F05/F06/F07/F08/F10/F11.
+  - Persists to **PostgreSQL** using the ERD tables: `tenant`, `user_account`, `role`, `ticket`, `timeline_event`, `attachment`, `outbox_event`, `audit_log`, `email_template`, `tenant_config`, etc.
+- **Background Job Runner container** (C4 L2):
+  - Spring Boot application with scheduled tasks or Spring AMQP later.
+  - Reads `outbox_event` and sends:
+    - lifecycle emails via SMTP (F07),
+    - CSV exports (F09),
+    - AV status updates, etc.
+- **Database container**:
+  - PostgreSQL 15 with schema aligned to ERD and NFRs (indexes on `(tenant_id, status, updated_at)` and `(tenant_id, assignee_user_id, status)` for P02).
+- **Object Storage container**:
+  - MinIO (S3-compatible) in dev; S3-like APIs for pre-signed uploads (`attachment.object_key`, `av_status`).
+- **Cache container**:
+  - Redis for session storage, rate-limit counters (RL01), and hot queries if needed.
+- **Frontend**:
+  - React + TypeScript SPA for Consumer, Agent/Manager, and Admin consoles (C4 L1 & L2 Tier 1).
 
-- **Database:** PostgreSQL 16 for OLTP, shared-schema multi-tenancy, append-only
-  audit log, and outbox_event table.
+This option best supports the decision drivers and keeps the “golden thread” from case study → user stories → NFRs → C4 L1–L4 → ERD → PoC.
 
-- **Cache & rate limiting:** Redis as infrastructure cache (sessions, rate-limit
-  counters, hot lists).
+### Consequences
 
-- **File/Object Storage:** MinIO (S3-compatible) for attachments and CSV
-  exports, accessed via pre-signed URLs.
+#### Good
 
-- **AV Scanner:** ClamAV exposed via HTTP callback.
+- **NFR alignment**  
+  - Spring Boot + PostgreSQL can comfortably meet **P01/P02** for typical bank/telecom volumes in a monolith.
+  - Asynchronous jobs + outbox pattern support F07/F09/F11 and protect P01 by moving slow I/O off the request path.
+  - Spring Security OIDC, JWT support and well-known hardening patterns help with **S01–S03**.
 
-- **Email System:** Any SMTP-compatible transactional email provider
-  (SendGrid-like abstraction), called by background jobs.
+- **Excellent tooling & ecosystem**  
+  - Mature libraries for:
+    - OIDC + PKCE (sign-in with external IdP),
+    - validation, error handling, testing (JUnit, Testcontainers),
+    - observability (Micrometer, OpenTelemetry) for **OBS01/SLO01**.
 
-- **Containerisation:** Docker images for Web Application, Background Job
-  Runner, PostgreSQL, MinIO, ClamAV (local dev); deployable to Kubernetes or
-  container platform in future.
+- **Great fit for ERD and multi-tenancy**  
+  - JPA/Hibernate map cleanly onto the ERD with `tenant_id` on every aggregate.
+  - Transactions map directly to outbox pattern (single DB commit for domain + outbox rows).
 
-This stack is reflected in the C4 L2 container diagram:
+- **Credible enterprise story**  
+  - Stack is very common in regulated sectors; good story to VC / “ABC Limited” context.
+  - React + REST API is mainstream and future-proof for adding mobile or chat-bot channels.
 
-- Web Application (Spring Boot)
-- Background Job Runner (Spring Boot worker)
-- Database (PostgreSQL)
-- Cache (Redis)
-- File/Object Storage (S3/MinIO)
-- AV Scanner (ClamAV)
-- Email System
-- Organisation IdP (OIDC / SSO)
+#### Bad (and mitigations)
 
-## Consequences
+- **Higher baseline resource usage than lightweight stacks**  
+  - JVM + Spring Boot are heavier than a minimal Node or Go service.
+  - **Mitigation**: Use Docker for local dev; keep dev profile lean; avoid unnecessary dependencies.
 
-### Positive
+- **Two-language stack (Java + TypeScript)**  
+  - Increases cognitive load for a single student.
+  - **Mitigation**: Focus PoC depth on backend (F01 + F03 + notifications); keep frontend thin and wireframe-like but accessible (A01–A03).
 
-- **Strong alignment with ADR-01:** Spring Boot naturally supports layered
-  architecture and the Transactional Outbox pattern.
-- **Security and SSO:** Spring Security has first-class OIDC + PKCE support,
-  making S01/S02 realistic in the proof-of-concept.
-- **Performance and scalability:** Java + PostgreSQL + Redis is a proven stack
-  for low-latency CRUD workloads (P01/P02, SC01).
-- **Developer productivity:** Spring Data JPA, migrations (Flyway/Liquibase),
-  and React component libraries reduce boilerplate.
-- **Portability:** S3-compatible storage (MinIO) + Dockerised stack avoid
-  vendor lock-in.
+- **Spring complexity for a small team**  
+  - Many features; easy to misconfigure security or performance.
+  - **Mitigation**: Follow recommended Spring Boot defaults; follow “production-ready” guidance but only enable what’s needed; document key config choices in other ADRs (auth, rate limiting, etc.).
 
-### Negative / Trade-offs
+## Pros and Cons of the Options
 
-- **Learning curve:** Spring Boot + React + Docker is heavier than e.g. Node.js
-  or pure serverless for a small team; mitigated by focusing PoC only on F01
-  and F03 plus selected NFRs.
-- **Operational overhead vs serverless:** Requires container orchestration and
-  monitoring; mitigated by keeping a single architectural quantum and using
-  simple Docker Compose for PoC.
-- **TypeScript vs Java:** Type safety is split between Java and TypeScript;
-  this is mitigated by using OpenAPI-generated client types for the React app.
+### 1) Java / Spring Boot / React / PostgreSQL / S3 / Redis (**Chosen**)
 
-## Traceability
+- **Pros**
+  - Very common enterprise SaaS stack: credible for banks/telecoms, easier to justify in report.
+  - Spring Boot directly supports layered architecture, transactional outbox, scheduled jobs and integration with SMTP, S3, Redis.
+  - Strong security support: OIDC/OAuth2, CSRF, CORS, encryption best-practices.
+  - Excellent testing tooling (JUnit, Testcontainers) supports NFR validation and design verification.
+  - Maps cleanly to C4 L2/L3 and ERD tables; natural fit for multi-tenant PostgreSQL design.
 
-- **Requirements:** F01–F12, P01/P02, AV01, S01–S03, SC01, OBS01, AUD01,
-  FRONT01.
-- **C4:** L2 containers (Web Application, Background Job Runner, Database,
-  Cache, File Store, AV Scanner, Email System, IdP).
-- **ERD:** Implemented in PostgreSQL according to the CMS ERD.
-- **ADRs:** Builds directly on ADR-01 and is referenced by ADR-03, ADR-04,
-  ADR-05, ADR-07, ADR-08, ADR-09, ADR-10, ADR-11.
+- **Cons**
+  - Learning curve and initial setup are non-trivial.
+  - JVM footprint higher than e.g. serverless or Go; dev environment must be sized appropriately.
+  - Requires juggling Java and TypeScript in one project.
+
+---
+
+### 2) .NET 8 / ASP.NET Core + React + SQL Server + Azure Blob + Azure Cache for Redis
+
+- **Pros**
+  - Modern, high-performance framework with excellent tooling (Visual Studio, Rider).
+  - Built-in primitives for MVC, Razor, minimal APIs, authentication & identity.
+  - Maps one-to-one to the ADR-01 architecture (monolith + background workers + SQL database).
+  - SQL Server + Azure Blob + Azure Cache form a coherent Microsoft ecosystem, convenient on Azure.
+
+- **Cons**
+  - Stronger coupling to Windows/Azure ecosystem; less portable for mixed environments.
+  - Course and labs focus more on Java/Spring style examples; extra time to adjust.
+  - For PoC, spinning up Azure services adds overhead vs local Docker PostgreSQL/MinIO.
+
+**Why not chosen now?**  
+Technically a valid choice, but adds Azure + .NET ecosystem learning overhead without changing the architectural story. For a single-student PoC, Spring Boot + PostgreSQL is more aligned with course material and is simpler to run locally.
+
+---
+
+### 3) Node.js / NestJS + React + PostgreSQL + S3 + Redis
+
+- **Pros**
+  - Single language (TypeScript) across backend and frontend.
+  - NestJS gives a structured framework (modules, providers, controllers).
+  - Good fit for simple REST APIs and websockets if needed later (e.g. live updates).
+
+- **Cons**
+  - Less built-in support for enterprise patterns such as outbox, complex transaction handling.
+  - Many choices for security, ORMs, background jobs (TypeORM/Prisma/Knex + Bull/Agenda, etc.) – more design surface for the same result.
+  - Community solutions for observability, rate limiting, etc., are more varied in quality.
+
+**Why not chosen now?**  
+Although NestJS could implement the design, the number of decisions around ORMs, DI, job queues, etc., would dilute the focus of the report from architecture trade-offs to library selection. Spring Boot gives a more coherent “batteries included” story.
+
+---
+
+### 4) Serverless-first (AWS Lambda / API Gateway / DynamoDB / S3 / Cognito / SES)
+
+- **Pros**
+  - Very good horizontal scalability and pay-per-use pricing.
+  - Many managed services: queues, email, monitoring, identity.
+  - Potentially attractive long-term option once CMS is successful and event-driven.
+
+- **Cons**
+  - Strong vendor lock-in; architecture becomes tightly coupled to AWS primitives.
+  - Cold starts and cross-function tracing complicate meeting **P01/P02** and **OBS01**.
+  - Harder to demonstrate and test locally in SHU lab environment.
+  - Data model would need to be re-designed for DynamoDB rather than relational ERD.
+
+**Why not chosen now?**  
+The assignment emphasises C4 + ERD + layered architecture. Serverless would shift a lot of complexity into infrastructure and AWS-specific services, distracting from the architectural reasoning. For the PoC, serverless would increase risk without improving the marking story.
+
+## Overall why the alternatives were not chosen (critical engagement)
+
+- **.NET 8 / ASP.NET Core stack** would deliver similar architectural benefits but at the cost of adopting a full Microsoft ecosystem (VS, Azure services) that is less aligned with the teaching context and my existing skillset. It does not significantly improve any NFR and would reduce the time available for deeper architectural analysis.
+
+- **Node.js / NestJS stack** offers language unification (TypeScript everywhere) but requires more decisions and third-party tooling to match Spring Boot’s capabilities for transactional outbox, background jobs, and security. That extra decision surface does not improve the “golden thread” from NFRs to architecture and risks a shallower implementation.
+
+- **Serverless-first stack** would require re-thinking the ERD for DynamoDB and designing function boundaries, queues, and orchestration (Step Functions, EventBridge, etc.). Cold starts and distributed tracing also complicate hitting p95 latency targets (P01/P02). This is interesting research but out-of-scope for a single-student L6 module with a PoC.
+
+## Confirmation and Traceability
+
+- **C4 L1:** CMS as a single web application with three UIs (Consumer, Agent/Manager, Admin) implemented in React, backed by a Spring Boot API. External systems (Organisation IdP, File Storage, AV Scanner, Email) are integrated via HTTPS and SMTP using this stack.
+
+- **C4 L2:**  
+  - `Web Application (Spring Boot)` + `Background Job Runner (Spring Boot)` + `PostgreSQL` + `MinIO` + `Redis` containers concretely implement the chosen ADR-01 quantum.  
+  - Technology labels in the container diagram match this ADR.
+
+- **C4 L3/L4:**  
+  - Components (Request Gateway, Ticketing Module, File & Attachment Module, Auth/RBAC, Outbox Writer, Data Access Layer) are implemented using Spring MVC controllers, services, repositories and domain classes.  
+  - Your L4 sequence diagrams (Create Ticket with AV gating; Agent Assign/Resolve flow) assume Spring controllers/services and relational transactions.
+
+- **ERD:**  
+  - PostgreSQL schema for `tenant`, `ticket`, `timeline_event`, `attachment`, `outbox_event`, `audit_log`, etc., assumes a relational database with ACID transactions, which is satisfied by PostgreSQL in this stack.
+
+- **User Stories & NFRs:**  
+  - This decision supports all user stories US1–US17 that require secure, transactional operations, multi-tenant isolation, and async notifications.  
+  - NFRs mapped to containers (P01/P02, AV01, S01–S03, SC01, OBS01, AUD01, RL01, DR01, BKP01, KMS01, DATA01) are achievable with Spring Boot + PostgreSQL + Redis + S3/MinIO and standard libraries.
+
+## References
+
+Same reference set as ADR-01 (extended for technology-specific docs in other ADRs).
 
